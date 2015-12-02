@@ -1,0 +1,21 @@
+def get_random_col(num_cols): [int(random() * *num_cols)];
+
+
+def split_table(all_wine_info, current_table):
+  rand_col = get_random_col(num_cols);
+
+  curr_features = [from current_table where feature_id == rand_col emit *];
+
+  -- Calculate the threshold
+  
+  selected_ids_1 = [from curr_features where feature_val > threshold];
+  
+  selected_ids_2 = [from curr_features where feature_val ≤ threshold];
+  
+  split_wines_1 = [from all_wine_info, selected_ids_1 where all_wine_info.wine_id == selected_ids_1 emit *];
+  
+  split_wines_2 = [from all_wine_info, selected_ids_2 where all_wine_info.wine_id == selected_ids_1 emit *];
+
+  -- if...
+  split_table(all_wine_info, split_wines_1);
+  split_table(all_wine_info, split_wines_2);

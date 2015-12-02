@@ -1,0 +1,5 @@
+wine_train = load("http://students.washington.edu/nreiter/train_denorm.csv", csv(schema(wine_id:int, feature_id:int, feature_val:float), skip=0));
+wine_test = load("http://students.washington.edu/nreiter/test_denorm.csv", csv(schema(wine_id:int, feature_id:int, feature_val:float), skip=0));
+
+store(wine_train, WineTrainDenorm);
+store(wine_test, WineTestDenorm);
