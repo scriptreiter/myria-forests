@@ -1,21 +1,28 @@
+static_depth = [2];
+trees = empty(tree_id:int,split_id:int,left_split:int,right_split:int,majority:int);
+
 def get_random_col(num_cols): [int(random() * *num_cols)];
 
+-- TODO: Write calculate_majority
 
-def split_table(all_wine_info, current_table):
-  rand_col = get_random_col(num_cols);
+def split_table(all_wine_info, current_table, tree_id, split_id, depth):
+  case when depth < static_depth then
+    trees = trees + [*tree_id,*splid_id,2 * *split_id, 2 * *split_id + 1, calculate_majority(current_table)];
 
-  curr_features = [from current_table where feature_id == rand_col emit *];
+    rand_col = get_random_col(num_cols);
 
-  -- Calculate the threshold
-  
-  selected_ids_1 = [from curr_features where feature_val > threshold];
-  
-  selected_ids_2 = [from curr_features where feature_val ≤ threshold];
-  
-  split_wines_1 = [from all_wine_info, selected_ids_1 where all_wine_info.wine_id == selected_ids_1 emit *];
-  
-  split_wines_2 = [from all_wine_info, selected_ids_2 where all_wine_info.wine_id == selected_ids_1 emit *];
+    curr_features = [from current_table where feature_id == rand_col emit *];
 
-  -- if...
-  split_table(all_wine_info, split_wines_1);
-  split_table(all_wine_info, split_wines_2);
+    -- Calculate the threshold
+  
+    selected_ids_1 = [from curr_features where feature_val > threshold];
+  
+    selected_ids_2 = [from curr_features where feature_val ≤ threshold];
+  
+    split_wines_1 = [from all_wine_info, selected_ids_1 where all_wine_info.wine_id == selected_ids_1 emit *];
+  
+    split_wines_2 = [from all_wine_info, selected_ids_2 where all_wine_info.wine_id == selected_ids_1 emit *];
+
+    split_table(all_wine_info, split_wines_1, 2 * tree_id, depth + 1);
+    split_table(all_wine_info, split_wines_2, 2 * tree_id + 1, depth + 1);
+  else end;
