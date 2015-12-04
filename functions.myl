@@ -4,29 +4,28 @@ trees = empty(tree_id:int,split_id:int,left_split:int,right_split:int,majority:i
 def get_random_col(num_cols): [int(random() * *num_cols)];
 
 -- TODO: Write calculate_majority
+define choose_split(left, right, thresh, value) {
+  case when value < thresh then left
+    else right end;
 
-def split_table(all_wine_info, current_table, tree_id, split_id, depth):
-  -- If we're still less than the depth
-  case when depth <= static_depth then
+-- all_wine_info: denormalized table of features
+-- tree_id: the id of this tree
+def split_table(all_wine_info, tree_id):
+  cur = [0];
+  -- TODO: Are the unique wine IDs the first column in all_wine_info?
+  -- TODO: How to select unique?
+  splits = [from all_wine_info emit 0, $0];
+
+  do
     -- add this table to the tree
     trees = trees + [*tree_id,*splid_id,2 * *split_id, 2 * *split_id + 1, calculate_majority(current_table)];
-
     -- choose a random column
     rand_col = get_random_col(num_cols);
-
     curr_features = [from current_table where feature_id == rand_col emit *];
-
     -- Calculate the threshold
-  
-    selected_ids_1 = [from curr_features where feature_val > threshold];
-  
-    selected_ids_2 = [from curr_features where feature_val ≤ threshold];
-  
-    split_wines_1 = [from all_wine_info, selected_ids_1 where all_wine_info.wine_id == selected_ids_1 emit *];
-  
-    split_wines_2 = [from all_wine_info, selected_ids_2 where all_wine_info.wine_id == selected_ids_1 emit *];
-
-    -- split
-    split_table(all_wine_info, split_wines_1, 2 * tree_id, depth + 1);
-    split_table(all_wine_info, split_wines_2, 2 * tree_id + 1, depth + 1);
-  else end;
+    threshold = [from curr_features, splits where splits.$0 = *cur emit avg(curr_features.$2)];
+    -- split accordingly
+    splits = [from splits emit choose_split(2 * *cur, 2 * *cur + 1, *threshold, $0), $1];
+    cur = [*cur + 1];
+  -- TODO: determine condition
+  while [];
