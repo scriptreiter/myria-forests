@@ -1,0 +1,71 @@
+-- Expected schema of the trees table
+-- [
+--  tree_id, split_id, feature_id, threshold, left_split, right_split, majority
+-- ]
+
+-- Get test items from database
+test_data = scan(public:adhoc:WineTestDenorm);
+trees = scan(public:adhoc:WineTrees);
+
+-- The current item in the test set
+test_item_id = [0];
+
+-- Get total number of test items
+num_test_items = [from test_data emit count(1)];
+
+-- Get total number of trees
+num_trees = [from trees where split_id == 0 emit count(1)];
+
+-- Set up an empty relation to store the results of testing each
+-- entry from the test set
+test_results = empty(wine_id:int,is_correct:boolean);
+
+-- Iterate through all test items
+do
+  tree_id = [0];
+
+  -- Empty relation to store the majority vote for each tree
+  tree_results = empty(majority:int);
+
+  -- Iterate through all trees for the current test_item
+  do
+    -- Begin at the first split, and traverse the tree
+    curr_split = [0];
+
+    -- Get info on first split
+    split_info = limit([from trees where trees.tree_id == *tree_id and trees.split_id == *curr_split emit *], 1);
+
+    -- Iterate through the rest of the splits
+    do
+      -- Get the value of the candidate wine for the given split feature
+      test_val = [from test_data where wine_id == *test_item_id and test_data.feature_id == *split_info.feature_id emit feature_val];
+
+      -- Select the correct split to continue with
+      next_split = [case when *test_val.feature_val > *split_info.threshold then *split_info.left
+        else *split_info.right end];
+
+      -- Get info on the next split for this tree
+      split_info = limit([from trees where trees.tree_id == *tree_id and trees.split_id == *curr_split emit *], 1);
+    while [*split_info.left_split > -1 and *split_info.right_split > -1];
+
+    -- We should have the split information for the leaf/consensus node, now
+
+    - Store the majority result vote for this tree
+    tree_results = tree_results + [*split_info.majority];
+
+    -- Increment the tree id to move to the next tree
+    tree_id = [*tree_id + 1];
+  while [*tree_id < *num_trees];
+
+  correct_label = [from test_data where wine_id == *test_item_id and test_data.feature_id == "category" emit feature_val];
+  majority_counts = [from tree_results emit count(majority) as majority_count, majority];
+  max_majority_count = [from majority_counts emit max(majority_count)];
+  voted_label = limit([from majority_counts where majority_count == *max_majority_count emit majority], 1);
+  test_results = test_results + [*test_item_id as wine_id, *correct_label == *voted_label as is_correct];
+
+  -- Move to the next test item
+  test_item_id = [*test_item_id + 1];
+while [*test_item_id < *num_test_items];
+
+-- Store if correct or not
+store(test_results, WineTreeResults);
