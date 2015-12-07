@@ -23,8 +23,6 @@ def split_table(all_wine_info, tree_id):
   cur_node = [0];
   -- id of independent variable
   indep = [0];
-  -- TODO: Are the unique wine IDs the first column in all_wine_info?
-  -- TODO: How to select unique?
   unique_ids = distinct([from all_wine_info emit $0]);
   splits = [from unique_ids emit 0, $0];
 
