@@ -42,4 +42,4 @@ def split_table(all_wine_info, tree_id):
     splits = [from splits emit choose_split(2 * *cur, 2 * *cur + 1, *threshold, $0), $1];
     cur = [*cur + 1];
   -- TODO: determine condition
-  while [];
+  while [*cur_node < pow(*static_depth, 2)];
