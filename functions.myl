@@ -3,14 +3,15 @@ trees = empty(tree_id:int,node_id:int,left_node:int,right_node:int,majority:int)
 
 def get_random_col(num_cols): [int(random() * *num_cols)];
 
--- TODO: Write calculate_majority
 -- cur: current node
 -- independent: id of independent variable in denormalized table
 -- splits: the table (split_id, wine_id)
 -- info: the denormalized table of wine info (wine_id, feature_id, feature_val)
 define calculate_majority(cur, independent, splits, info):
   aggregates = [from info, splits where splits.$0 = *cur and info.$0 = *independent emit info.$2, count(info.$2) as feature_count];
-  [from aggregates emit info.$0, max(info.$1)];
+  max_count = [from aggregates emit max(info.$1)];
+  limit([from aggregates where $1 = max_count emit $0], 1)
+  
 
 define choose_split(left, right, thresh, value) {
   case when value < thresh then left
@@ -28,7 +29,7 @@ def split_table(all_wine_info, tree_id):
 
   do
     -- add this table to the tree
-    trees = trees + [*tree_id,*cur_node,2 * *cur_node, 2 * *cur_node + 1, calculate_majority(cur, splits, all_wine_info)];
+    trees = trees + [*tree_id,*cur_node,2 * *cur_node, 2 * *cur_node + 1, *calculate_majority(cur, splits, all_wine_info)];
     -- choose a random column
     rand_col = get_random_col(num_cols);
     curr_features = [from current_table where feature_id == rand_col emit *];
