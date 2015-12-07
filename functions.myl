@@ -10,7 +10,7 @@ def get_random_col(num_cols): [int(random() * *num_cols)];
 def calculate_majority(cur, independent, splits, info):
   aggregates = [from info, splits where splits.$0 = *cur and info.$0 = *independent emit info.$2, count(info.$2) as feature_count];
   max_count = [from aggregates emit max(info.$1)];
-  limit([from aggregates where $1 = max_count emit $0], 1)
+  limit([from aggregates where $1 = max_count emit $0], 1);
   
 -- left: the left node id
 -- right: the right node id
