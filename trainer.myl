@@ -1,0 +1,194 @@
+-- Helper function
+-- Get a random number less than `lim`
+def get_rand_int(lim): [int(random() * lim];
+
+-- The number of trees we want
+num_trees = [3];
+
+-- Set the number of features available to consider at each split level
+req_num_features = [6];
+
+-- Number of thresholds to check (from 1 / (num + 2) * range to (num + 1) / (num + 2) * range)
+num_thresholds = [3];
+
+-- The percentage of samples in a given split that must be identical to stop splitting
+min_label_percent = [0.9];
+
+-- This will store the tree split information as:
+--   tree id, node id, feature_id, threshold, left child id, right child id, current vote
+-- We will probably eliminate the left and right child ids ultimately, as they can be calculated
+trees = empty(tree_id:int,node_id:int,left_node:int,right_node:int,majority:int);
+
+-- Read the wine information from the training relation
+wine_info = scan(public:adhoc:WineTrainDenorm);
+
+-- Get the labels from the training data
+labels = distinct([from wine_info where feature_id == 0 emit feature_val as label]);
+
+-- Get how many samples we have
+num_samples = [from wine_info where feature_id == 0 emit count(1)];
+
+-- Get the number of features
+num_features = [from wine_info where wine_id == 0 emit count(1)];
+
+-- Start with tree 0
+tree_id = [0];
+
+-- Build a tree each iteration
+do
+
+  -- Select a bunch of random sample ids with replacement
+  curr_ids = [from wine_info where feature_id == 0 emit get_rand_int(*num_samples) as sample_id];
+
+  -- Select the wine information pertaining to the randomly selected ids
+  curr_info = [from wine_info, curr_ids where wine_info.wine_id == curr_ids.sample_id emit *];
+
+  -- This is a queue of nodes/splits remaining to be
+  -- processed. We start with the first
+  splits_to_process = [1];
+
+  -- build table of split -> wine id in order to track
+  -- what split each instance belongs to
+  -- initialized with each belonging to split 0
+  -- TODO: MAKE CERTAIN THIS ALLOWS THE DUPLICATES
+  unique_ids = [from curr_info where feature_id == 0 emit wine_id];
+  split_meta = [from unique_ids emit 1 as split_id, $0 as wine_id];
+
+  -- Process splits/nodes as long as any remain to be processed
+  do
+    -- Select a split to process further
+    curr_split = limit(splits_to_process, 1);
+
+    -- Get the information for only samples in the current split
+    curr_split_info = [from curr_info, split_meta where split_meta.split_id == *curr_split and split_meta.wine_id == curr_info.wine_id emit curr_info.*];
+
+    -- We need to select a random subset of features to consider
+    -- The size of the subset is limited by req_num_features
+    curr_features = empty(feature_id:int);
+    do
+      -- Attempt to add another random feature
+      -- I would love to do this a more efficient way later
+      -- The -1 +1 is to remove the possibility of selecting feature 0, which is the class label
+      curr_features = distinct(curr_features + [get_rand_int(*num_features - 1) + 1 as feature_id]);
+
+      -- Get the total number of distinct features selected so far
+      curr_num_features = [from curr_features emit count(1)];
+    while [*curr_num_features < *req_num_features];
+
+    -- Count the current number of samples in the split
+    curr_num_samples = [from curr_split_info where feature_id == 0 emit count(1)];
+
+    -- Get the fraction for each label
+    label_percent = [from curr_split_info where feature_id == 0 emit count(1) / *curr_num_samples as label_perc, feature_val as label];
+
+    -- Get the entropy for each label
+    label_entropy = [from label_percent emit -1 * label_perc * log(label_perc) / log(2) as entropy];
+
+    -- Calculate the split entropy, which is the summation of the individual label entropies
+    par_entropy = [from label_entropy emit sum(entropy)];
+
+    -- Calculate and store the majority vote of the current split
+    max_percent = [from label_percent emit max(label_perc)]
+    curr_majority = limit([from label_percent where label_perc == *max_percent emit label], 1);
+
+    -- Variable for storing the max info
+    max_info = empty(feature:int, threshold:float, info_gain:float);
+
+    -- Go through each candidate feature
+    do
+      -- Select a feature
+      curr_feat = limit(curr_features, 1);
+
+      -- TODO: Go through thresholds (fractions of range (max - min))
+      -- Calculate the range of this
+      max_val = [from curr_split_info where feature_id == *curr_feat emit max(feature_val)];
+      min_val = [from curr_split_info where feature_id == *curr_feat emit min(feature_val)];
+
+      -- Go through a few candidate thresholds
+      -- Would be better to sort and check halfway between successive pairs, though
+      -- Current threshold index
+      curr_thresh = [0];
+      do
+        -- Calculate the current threshold under consideration
+        thresh = [(*max_val - *min_val) * (*curr_thresh + 1) / (*num_thresholds + 2)];
+
+        -- Get the ids of samples that fall into each split
+        left_ids = [from curr_split_info where feature_id == *curr_feat and feature_val > *thresh emit wine_id];
+        right_ids = [from curr_split__info where feature_id == *curr_feat and feature_val <= *thresh wine_id];
+
+        -- Get the number of samples in each split
+        curr_num_left = [from left_ids emit count(1)];
+        curr_num_right = [from right_ids emit count(1)];
+
+        -- Get the entropy percentages for all labels in both splits
+        left_percents = [from curr_split_info, left_ids where curr_split_info.wine_id == left_ids.wine_id and feature_id == 0 emit count(1) / *curr_num_left as label_perc, feature_val as label];
+        right_percents = [from curr_split_info, right_ids where curr_split_info.wine_id == right_ids.wine_id and feature_id == 0 emit count(1) / *curr_num_right as label_perc, feature_val as label];
+
+        -- Calculate the entropies for categories in each split
+        left_entropies = [from left_percents emit -1 * label_perc * log(label_perc) / log(2) as entropy];
+        right_entropies = [from right_percents emit -1 * label_perc * log(label_perc) / log(2) as entropy];
+
+        -- Calculate the total entropy for each
+        left_entropy = [from left_entropies emit sum(entropy)];
+        right_entropy = [from right_entropies emit sum(entropy)];
+
+        -- Calculate the weighted average child entropy
+        child_entropy = [((*curr_num_left / *curr_num_samples) * *left_entropy) + ((*curr_num_right / *curr_num_samples) * *right_entropy)];
+
+        -- Calculate the information gain by splitting on this feature with this threshold
+        info_gain = [*par_entropy - *child_entropy];
+
+        -- Store the feature/threshold/info gain information
+        threshold_info = threshold_info + [*curr_feat as feature, *thresh as threshold, *info_gain as info_gain];
+
+        -- Increment current threshold
+        curr_thresh = [*curr_thresh + 1];
+      while [*curr_thresh < *num_thresholds];
+
+      -- Get the remaining features
+      curr_features = [from curr_features where feature_id == *curr_feat emit *];
+      curr_num_features = [from curr_features emit count(1)];
+
+      -- Continue until we have checked all features
+    while [*curr_num_features > 0];
+
+    -- At this point, we have have information on potential thresholds for each of
+    -- the randomly selected features for this node/split. Now we choose the max info gain.
+
+    -- Get the maximum information gain of the potential splits
+    max_info_gain = [from threshold_info emit max(info_gain)];
+
+    -- Select the split information for the given max
+    max_info = limit([from threshold_info where info_gain == *max_info_gain emit *], 1);
+
+    -- Calculate the split ids of the children splits if needed
+    left_child_id = [case when *max_percent >= *min_label_percent then -1 else 2 * *curr_split end];
+    right_child_id = [case when *max_percent >= *min_label_percent then -1 else (2 * *curr_split) + 1 end];
+
+    -- Store the information of the best split, including the feature to split on, the threshold, and the current majority
+    trees = trees + [*tree_id, *curr_split, *max_info.feature, *max_info.threshold, *left_child_id, *right_child_id, *curr_majority];
+
+    splits_to_add = left_child_id + right_child_id;
+
+    -- Add the children to the queue if we are not finished with this branch
+    splits_to_process = splits_to_process + [from splits_to_add where $0 != -1 emit *];
+
+    -- Get the samples not currently related to this split
+    unaffiliated_samples = [from split_meta where split_id != *curr_split emit *];
+
+    -- Get the left and right samples in a mapping from new_id -> wine_id
+    left_samples = [from curr_split_info where feature_id == *max_info.feature and feature_val > *max_info.threshold emit *left_child_id as split_id, curr_split_info.wine_id as wine_id];
+    right_samples = [from curr_split_info where feature_id == *max_info.feature and feature_val <= *max_info.threshold emit *right_child_id as split_id, curr_split_info.wine_id as wine_id];
+
+    -- Set the new split meta information
+    split_meta = unaffiliated_samples + left_samples + right_samples;
+
+    -- Remove the latest split from the queue of unprocessed splits
+    splits_to_process = [from splits_to_process where $0 != *curr_split emit *];
+
+    queue_size = [from splits_to_process emit count(1)];
+  while [*queue_size > 0];
+
+  -- Increment the tree id
+  tree_id = [*tree_id + 1];
+while [*tree_id < *num_trees];

@@ -1,0 +1,57 @@
+def get_random_col(num_cols): [int(random() * *num_cols)];
+
+  
+-- left: the left node id
+-- right: the right node id
+-- thresh: the threshold to split on
+-- value: the value in question
+def choose_split(left, right, thresh, value) {
+  case when value < thresh then left
+    else right end;
+
+-- Start script
+static_depth = [2];
+trees = empty(tree_id:int,node_id:int,left_node:int,right_node:int,majority:int);
+wine_info = scan(public:adhoc:WineTrainDenorm);
+
+tree_id = [0];
+
+num_trees = [3];
+-- Build the trees
+do
+  splits_to_process = [0];
+
+  -- build table of (node, wine_id)
+  unique_ids = distinct([from wine_info emit $0]);
+  splits = [from unique_ids emit 0 as split_id, $0 as wine_id];
+
+  do
+    curr_split = limit(splits_to_process, 1);
+    -- Get the feature to split on
+    -- To do so, iterate until we get a feature that has not been selected, yet
+    rand_feat_id = [get_rand_col(len)];
+    -- Calculate the majority at this current split
+def calculate_majority(cur, independent, splits, info):
+    aggregates = [from wine_info, splits where splits.split_id == *cur_split and and wine_info.wine_id == splits.wine_id and info.feature_id == *independent emit info.$2, count(info.$2) as feature_count];
+  max_count = [from aggregates emit max(info.$1)];
+  limit([from aggregates where $1 = max_count emit $0], 1);
+
+
+    -- add this table to the tree
+    trees = trees + [*tree_id,*cur_node,2 * *cur_node, 2 * *cur_node + 1, *calculate_majority(cur, splits, all_wine_info)];
+    -- choose a random column
+    rand_col = get_random_col(num_cols);
+    curr_features = [from current_table where feature_id == rand_col emit *];
+    -- Calculate the threshold
+    threshold = [from curr_features, splits where splits.$0 = *cur emit avg(curr_features.$2)];
+    -- split accordingly
+    splits = [from splits emit choose_split(2 * *cur, 2 * *cur + 1, *threshold, $0), $1];
+    cur = [*cur + 1];
+  -- TODO: determine condition
+
+    -- Remove the latest split from the queue of unprocessed splits
+    splits_to_process = [from splits_to_process where $0 ≠ *curr_split emit *];
+  while [*cur_node < pow(*static_depth, 2)];
+
+  tree_id = [*tree_id + 1];
+while [*tree_id < *num_trees];
