@@ -192,3 +192,5 @@ do
   -- Increment the tree id
   tree_id = [*tree_id + 1];
 while [*tree_id < *num_trees];
+
+store(trees, WineTrees);
