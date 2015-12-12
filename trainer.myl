@@ -1,6 +1,6 @@
 -- Helper function
 -- Get a random number less than `lim`
-def get_rand_int(lim): [int(random() * lim];
+def get_rand_int(lim): [int(random() * lim)];
 
 -- The number of trees we want
 num_trees = [3];
@@ -17,7 +17,7 @@ min_label_percent = [0.9];
 -- This will store the tree split information as:
 --   tree id, node id, feature_id, threshold, left child id, right child id, current vote
 -- We will probably eliminate the left and right child ids ultimately, as they can be calculated
-trees = empty(tree_id:int,node_id:int,left_node:int,right_node:int,majority:int);
+trees = empty(tree_id:int,node_id:int,feature:int,threshold:float,left_node:int,right_node:int,majority:int);
 
 -- Read the wine information from the training relation
 wine_info = scan(public:adhoc:WineTrainDenorm);
@@ -88,11 +88,11 @@ do
     par_entropy = [from label_entropy emit sum(entropy)];
 
     -- Calculate and store the majority vote of the current split
-    max_percent = [from label_percent emit max(label_perc)]
+    max_percent = [from label_percent emit max(label_perc)];
     curr_majority = limit([from label_percent where label_perc == *max_percent emit label], 1);
 
     -- Variable for storing the max info
-    max_info = empty(feature:int, threshold:float, info_gain:float);
+    threshold_info = empty(feature:int, threshold:float, info_gain:float);
 
     -- Go through each candidate feature
     do
@@ -114,7 +114,7 @@ do
 
         -- Get the ids of samples that fall into each split
         left_ids = [from curr_split_info where feature_id == *curr_feat and feature_val > *thresh emit wine_id];
-        right_ids = [from curr_split__info where feature_id == *curr_feat and feature_val <= *thresh wine_id];
+        right_ids = [from curr_split_info where feature_id == *curr_feat and feature_val <= *thresh emit wine_id];
 
         -- Get the number of samples in each split
         curr_num_left = [from left_ids emit count(1)];
@@ -166,7 +166,7 @@ do
     right_child_id = [case when *max_percent >= *min_label_percent then -1 else (2 * *curr_split) + 1 end];
 
     -- Store the information of the best split, including the feature to split on, the threshold, and the current majority
-    trees = trees + [*tree_id, *curr_split, *max_info.feature, *max_info.threshold, *left_child_id, *right_child_id, *curr_majority];
+    trees = trees + [*tree_id as tree_id, *curr_split as node_id, *max_info.feature as feature, *max_info.threshold as threshold, *left_child_id as left_node, *right_child_id as right_node, int(*curr_majority) as majority];
 
     splits_to_add = left_child_id + right_child_id;
 
