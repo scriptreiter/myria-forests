@@ -50,7 +50,7 @@ do
 
     -- We should have the split information for the leaf/consensus node, now
 
-    - Store the majority result vote for this tree
+    -- Store the majority result vote for this tree
     tree_results = tree_results + [*split_info.majority];
 
     -- Increment the tree id to move to the next tree
