@@ -110,7 +110,7 @@ do
       curr_thresh = [0];
       do
         -- Calculate the current threshold under consideration
-        thresh = [(*max_val - *min_val) * (*curr_thresh + 1) / (*num_thresholds + 2)];
+        thresh = [(*max_val - *min_val) * (*curr_thresh + 1) / (*num_thresholds + 2) + *min_val];
 
         -- Get the ids of samples that fall into each split
         left_ids = [from curr_split_info where feature_id == *curr_feat and feature_val > *thresh emit wine_id];
