@@ -34,11 +34,14 @@ num_features = [from wine_info where wine_id == 0 emit count(1)];
 -- Start with tree 0
 tree_id = [0];
 
+-- Get a sequence with the same size as the number of samples
+sample_seq = seq(*num_samples);
+
 -- Build a tree each iteration
 do
 
   -- Select a bunch of random sample ids with replacement
-  curr_ids = [from wine_info where feature_id == 0 emit get_rand_int(*num_samples) as sample_id];
+  curr_ids = [from sample_seq emit get_rand_int(*num_samples) as sample_id];
 
   -- Select the wine information pertaining to the randomly selected ids
   curr_info = [from wine_info, curr_ids where wine_info.wine_id == curr_ids.sample_id emit *];
